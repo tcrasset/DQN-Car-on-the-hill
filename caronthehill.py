@@ -1,7 +1,7 @@
 import os
 from keras.models import Sequential
-from keras.layers import Dense, Activation
-from keras.optimizers import Adam, sgd
+from keras.layers import Dense, Conv2D, Activation
+from keras.optimizers import RMSprop
 
 from tensorflow import ConfigProto, Session
 from keras.backend import set_session
@@ -37,16 +37,16 @@ def imagePreprocessing():
 
 
     for i in range(amount_of_frames):
+        print("Preprocessing frames")
         # Capture frame-by-frame
         _, frame = cap.read()
-        frame = cv2.resize(frame, (200, 200))
+        frame = cv2.resize(frame, (100, 100))
         gray =  cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         cv2.imwrite("processed/img{0:0>4}.jpg".format(i), gray)
 
-
     cap.release()
     cv2.destroyAllWindows()
-# When everything done, release the capture
+
 def makeVideo():
     """ 
     Creates a 10 fps video in mp4 format called 'caronthehill_clip'
@@ -62,8 +62,6 @@ def makeVideo():
     -video in the current working directory
     """
     os.system("cd video && ffmpeg -r 10 -i img%05d.jpg -vcodec mpeg4 -y caronthehill_clip.mp4")
-
-
 
 
 class Domain:
@@ -260,7 +258,7 @@ class Domain:
 
 
 
-class ParametricQLearningAgent:
+class DeepQNetwork:
 
     def __init__(self, domain, n_episodes):
 
@@ -268,25 +266,25 @@ class ParametricQLearningAgent:
         self.n_episodes = n_episodes
         self.learning_rate = 0.05
         self.batch_size = 32
-        self.epsilon = 0.1  # exploration rate
-        self.epsilon_decay = 0.99
+        self.epsilon = 1  # exploration rate
+        self.epsilon_decay = 0.95
         self.model = self.create_model()
-        self.memory = deque(maxlen=2000)
+        self.memory = deque(maxlen=5000)
         
     def create_model(self):
         # Neural Net for Deep Q Learning
         model = Sequential()
-        # Input Layer of state size(3) and Hidden Layer with 24 nodes
-        model.add(Dense(24, input_shape=(3,), activation='relu'))
-        # Hidden layer with 24 nodes
-        model.add(Dense(24, activation='relu'))
-        # Output Layer with reward
-        model.add(Dense(1, activation='linear'))
+        model.add(Conv2D(16, strides=4, kernel_size=8, input_shape=(200,200,1), activation = 'relu'))
+        model.add(Conv2D(32, strides=2, kernel_size=4, activation = 'relu'))
+        model.add(Dense(256, activation='relu'))
+        # Output Layer , one for each action
+        model.add(Dense(2, activation='linear'))
         # Create the model based on the information above
-        model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
+        opt = RMSprop(lr=0.001, rho=0.9, epsilon=None, decay=0.0)
+
+        model.compile(loss='mse', optimizer=opt)
 
         return model
-
 
     def chooseAction(self, position, speed):
         """Epsilon greedy"""
@@ -332,9 +330,9 @@ class ParametricQLearningAgent:
             self.domain.reset()
             print("episode: {}/{}".format(ep, self.n_episodes))
             
-            if (ep + 1) %50 == 0:
-                self.createRewardHeatmap(ep + 1, 'mlp')
-                self.createPolicyHeatmap(ep + 1, 'mlp')
+            # if (ep + 1) %50 == 0:
+            #     self.createRewardHeatmap(ep + 1, 'mlp')
+            #     self.createPolicyHeatmap(ep + 1, 'mlp')
             
             # Refit model on 32 samples
             if len(self.memory) < self.batch_size:
@@ -372,7 +370,7 @@ if __name__ == '__main__':
     INTEGRATION_STEP = 0.001
 
 
-    # QNetwork = ParametricQLearningAgent(Domain(DISCOUNT, ACTIONS, INTEGRATION_STEP, DISCRETE_STEP), 1000)
+    # QNetwork = DeepQNetwork(Domain(DISCOUNT, ACTIONS, INTEGRATION_STEP, DISCRETE_STEP), 1000)
     # QNetwork.initTrainingSet(1,50)
 
     imagePreprocessing()
